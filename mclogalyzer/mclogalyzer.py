@@ -25,8 +25,13 @@ import os
 import re
 import sys
 import time
+import numpy
+import matplotlib
+matplotlib.use('Agg') # force plotter to not use an x-backend
+import pylab
 
 import jinja2
+
 
 
 REGEX_IP = "(\d+)\.(\d+)\.(\d+)\.(\d+)"
@@ -101,10 +106,11 @@ class UserStats:
         self._username = username
         self._logins = 0
 
-        self._active_days = set()
-        self._prev_login = None
-        self._first_login = None
-        self._last_login = None
+        self._day_activity  = {}
+        self._hour_activity = [0]*24
+        self._prev_login   = None
+        self._first_login  = None
+        self._last_login   = None
         self._time = datetime.timedelta()
         self._longest_session = datetime.timedelta()
 
@@ -123,6 +129,16 @@ class UserStats:
     def handle_logout(self, date):
         if self._prev_login is None:
             return
+        days, hours = get_time_distribution(self._prev_login, date)
+        # days is a dictionary of all dates (keys) and play minutes
+        for d in days:
+            if d in self._day_activity:
+                self._day_activity[d] += days[d] 
+            else:
+                self._day_activity[d]  = days[d]
+        # hours is an array of 24 elements
+        for i in range(len(hours)):
+            self._hour_activity[i] += hours[i]
         session = date - self._prev_login
         self._time += session
         self._longest_session = max(self._longest_session, session)
@@ -137,6 +153,80 @@ class UserStats:
                 self._ragequits += 1
 
         self._last_death_time = None
+
+    def make_plots(self, width, height):
+        print 'Creating figures for user ', self._username
+        # make daytime distribution plot
+        pylab.figure(1, figsize=(width/100.0, height/100.0))
+        x = []
+        for i in range(24):
+            x.append(datetime.datetime(2001, 1,1, hour=i))
+        justHours = matplotlib.dates.DateFormatter('%H:%M')
+        pylab.plot(x, self._hour_activity, 'o-')
+        pylab.gca().xaxis.set_major_formatter(justHours)
+        pylab.xlabel('Clock');
+        pylab.ylabel('Minutes played');
+        pylab.title('Daytime play distribution')
+        pylab.savefig('img/'+self._username+'_daytime_dist.png')
+        pylab.clf()
+
+        # playtime by day
+        today = datetime.date.today().toordinal()
+        start_date = today
+        for date in self._day_activity:
+            start_date = min(start_date, date)
+        n_days   = today - start_date + 1
+        n_month  = datetime.date.today().day
+        n_week   = datetime.date.today().weekday() + 1
+        playtime = [0]*n_days
+        weektime = [0]*7
+        date_tag = []
+        for i in range(n_days):
+            date_tag.append(datetime.datetime.fromordinal(start_date + i))
+        for date in self._day_activity:
+            playtime[date-start_date]                            = self._day_activity[date]
+            weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
+
+        # playtime by day (all history)
+        pylab.plot(date_tag, playtime, '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day')
+        pylab.savefig('img/'+self._username+'_day_history.png')
+        pylab.clf()
+
+        # playtime by day (current month)
+        pylab.plot(date_tag[-n_month:], playtime[-n_month:], '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day this month')
+        pylab.savefig('img/'+self._username+'_day_month.png')
+        pylab.clf()
+
+        # playtime by day (current week)
+        pylab.plot(date_tag[-n_week:], playtime[-n_week:], '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
+        pylab.gca().xaxis.set_minor_locator(matplotlib.ticker.MaxNLocator(1))
+        matplotlib.ticker.MaxNLocator
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day this week')
+        pylab.savefig('img/'+self._username+'_day_week.png')
+        pylab.clf()
+
+        # plot weekday pie chart
+        labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+        explode= [.03]*7
+        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True)
+        pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
+        pylab.savefig('img/'+self._username+'_weekday_pie.png')
+        pylab.clf()
 
     @property
     def username(self):
@@ -157,7 +247,7 @@ class UserStats:
 
     @property
     def active_days(self):
-        return len(self._active_days)
+        return len(self._day_activity)
 
     @property
     def time_per_active_day(self):
@@ -251,6 +341,7 @@ class ServerStats:
         self._time_played = datetime.timedelta()
         self._max_players = 0
         self._max_players_date = None
+        self._include_figures = False
 
     @property
     def statistics_since(self):
@@ -267,6 +358,10 @@ class ServerStats:
     @property
     def max_players_date(self):
         return self._max_players_date
+
+    @property
+    def include_figures(self):
+        return self._include_figures
 
 
 def grep_logname_date(line):
@@ -334,6 +429,23 @@ def grep_achievement(line):
     username = search.group(1)
     return username.decode("ascii", "ignore").encode("ascii", "ignore"), search.group(2)
 
+# returns number of minutes played during each clock hour and date between start and end
+def get_time_distribution(start, end):
+    hours = [0]*24
+    days  = {}
+    timeleft = end-start
+    time_iterate = start
+    while time_iterate < end:
+        next_hour = (time_iterate + datetime.timedelta(hours=1)).replace(minute=0, second=0)
+        dt = min(next_hour-time_iterate, end-time_iterate)
+        hours[time_iterate.hour]  += dt.seconds/60.0
+        dateKey = time_iterate.date().toordinal()
+        if dateKey in days:
+            days[dateKey] += dt.seconds/60.0
+        else:
+            days[dateKey]  = dt.seconds/60.0
+        time_iterate += dt
+    return days, hours
 
 def format_delta(timedelta, days=True, maybe_years=False):
     seconds = timedelta.seconds
@@ -393,7 +505,6 @@ def parse_logs(logdir, since=None, whitelist_users=None):
                     if username not in users:
                         users[username] = UserStats(username)
                     user = users[username]
-                    user._active_days.add((date.year, date.month, date.day))
                     user._logins += 1
                     user._last_login = user._prev_login = date
                     if user._first_login is None:
@@ -421,7 +532,6 @@ def parse_logs(logdir, since=None, whitelist_users=None):
                     continue
 
                 user = users[username]
-                user._active_days.add((date.year, date.month, date.day))
                 user.handle_logout(date)
                 if username in online_players:
                     online_players.remove(username)
@@ -510,6 +620,15 @@ def main():
     parser.add_argument("--chat",
                         action='store_true',
                         help="display the general chat log")
+    parser.add_argument("--figures",
+                        action='store_true',
+                        help="generate statistic figures (stored in \"img\" folder)")
+    parser.add_argument("--figuresize",
+                        nargs=2,
+                        default=(800,600),
+                        type=int,
+                        help="figure size (in pixels) for all generated plots",
+                        metavar="<width height>")
     parser.add_argument("logdir",
                         help="the server log directory",
                         metavar="<logdir>")
@@ -533,22 +652,31 @@ def main():
 
     whitelist_users = parse_whitelist(args["whitelist"]) if args["whitelist"] else None
     users, server, chats = parse_logs(args["logdir"], since, whitelist_users)
+
     if not args['chat']:
         chats = [] # ignore chat messages
+    if args['figures']:
+        if not os.path.isdir('img'):
+            os.makedirs('img') # should include error testing if process does not have the right write permissions
+        server._include_figures = True
+        figure_width  = args['figuresize'][0]
+        figure_height = args['figuresize'][1]
 
     template_path = os.path.join(os.path.dirname(__file__), "template.html")
     if args["template"] is not None:
         template_path = args["template"]
     template_dir = os.path.dirname(template_path)
     template_name = os.path.basename(template_path)
-    #print template_path
-    #print template_dir, template_name
     if not os.path.exists(template_path):
         print "Unable to find template file %s!" % template_path
         sys.exit(1)
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
     template = env.get_template(template_name)
+    
+    if server._include_figures:
+        for u in users:
+            u.make_plots(figure_width, figure_height)
 
     f = open(args["output"], "w")
     f.write(template.render(users=users,
