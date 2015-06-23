@@ -158,18 +158,25 @@ class UserStats:
 
     def make_plots(self, width, height):
         print 'Creating figures for user ', self._username
-        # make daytime distribution plot
+        # create figure holder used for all plots
         pylab.figure(1, figsize=(width/100.0, height/100.0))
+
+        ### make daytime distribution plot
+        # create x-axis time stamps
         x = []
         for i in range(24):
             x.append(datetime.datetime(2001, 1,1, hour=i))
+        # do the actual plot
+        pylab.bar(x, self._hour_activity, width=1.0/24.0)
+        # format to make it pretty
         justHours = matplotlib.dates.DateFormatter('%H:%M')
-        pylab.plot(x, self._hour_activity, 'o-')
-        pylab.gca().xaxis.set_major_formatter(justHours)
         pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(justHours)
         pylab.xlabel('Clock');
+        pylab.xlim(x[0], x[-1])
         pylab.ylabel('Minutes played');
         pylab.title('Daytime play distribution')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/'+self._username+'_daytime_dist.png')
         pylab.clf()
 
@@ -191,7 +198,7 @@ class UserStats:
             weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
 
         # playtime by day (all history)
-        pylab.plot(date_tag, playtime, '.-')
+        pylab.plot(date_tag, playtime)
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
@@ -201,7 +208,7 @@ class UserStats:
         pylab.clf()
 
         # playtime by day (current month)
-        pylab.plot(date_tag[-n_month:], playtime[-n_month:], '.-')
+        pylab.plot(date_tag[-n_month:], playtime[-n_month:])
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
@@ -211,7 +218,7 @@ class UserStats:
         pylab.clf()
 
         # playtime by day (current week)
-        pylab.plot(date_tag[-n_week:], playtime[-n_week:], '.-')
+        pylab.plot(date_tag[-n_week:], playtime[-n_week:])
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
@@ -226,7 +233,8 @@ class UserStats:
         # plot weekday pie chart
         labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
         explode= [.03]*7
-        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True)
+        colors = ('#FF5050', '#009933', '#9966FF', '#996600', '#4D9494', '#C28585', '#3366CC')
+        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True, colors=colors)
         pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
         pylab.savefig('img/'+self._username+'_weekday_pie.png')
         pylab.clf()
@@ -350,31 +358,42 @@ class ServerStats:
         self._max_players_date = None
         self._include_figures = False
 
-        self._day_activity  = {}
+        self._day_play_minutes  = {}
+        self._day_active_users  = {}
         self._hour_activity = [0]*24
     
     def add_activity(self, user):
         for d in user._day_activity:
-            if d in self._day_activity:
-                self._day_activity[d] += user._day_activity[d] 
+            if d in self._day_play_minutes:
+                self._day_play_minutes[d] += user._day_activity[d] 
+                self._day_active_users[d] += 1
             else:
-                self._day_activity[d]  = user._day_activity[d]
+                self._day_play_minutes[d]  = user._day_activity[d]
+                self._day_active_users[d]  = 1
         for i in range(len(self._hour_activity)):
             self._hour_activity[i] += user._hour_activity[i]
 
     def make_plots(self, width, height):
         print 'Creating figures for server'
-        # make daytime distribution plot
+        # create figure holder used for all plots
         pylab.figure(1, figsize=(width/100.0, height/100.0))
+
+        ### make daytime distribution plot
+        # create x-axis time stamps
         x = []
         for i in range(24):
             x.append(datetime.datetime(2001, 1,1, hour=i))
+        # do the actual plot
+        pylab.bar(x, self._hour_activity, width=1.0/24.0)
+        # format to make it pretty
         justHours = matplotlib.dates.DateFormatter('%H:%M')
-        pylab.plot(x, self._hour_activity, 'o-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(justHours)
         pylab.xlabel('Clock');
+        pylab.xlim(x[0], x[-1])
         pylab.ylabel('Minutes played');
         pylab.title('Daytime play distribution')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/server_daytime_dist.png')
         pylab.clf()
 
@@ -385,16 +404,18 @@ class ServerStats:
         n_month  = datetime.date.today().day
         n_week   = datetime.date.today().weekday() + 1
         playtime = [0]*n_days
+        users    = [0]*n_days
         weektime = [0]*7
         date_tag = []
         for i in range(n_days):
             date_tag.append(datetime.datetime.fromordinal(start_date + i))
-        for date in self._day_activity:
-            playtime[date-start_date]                            = self._day_activity[date]
-            weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
+        for date in self._day_play_minutes:
+            playtime[date-start_date]                            = self._day_play_minutes[date]
+            users[   date-start_date]                            = self._day_active_users[date]
+            weektime[datetime.date.fromordinal(date).weekday()] += self._day_play_minutes[date]
 
         # playtime by day (all history)
-        pylab.plot(date_tag, playtime, '.-')
+        pylab.plot(date_tag, playtime)
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
@@ -403,8 +424,18 @@ class ServerStats:
         pylab.savefig('img/server_day_history.png')
         pylab.clf()
 
+        # active users by day (all history)
+        pylab.plot(date_tag, users)
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('Active players');
+        pylab.title('Online players per day')
+        pylab.savefig('img/server_day_users.png')
+        pylab.clf()
+
         # playtime by day (current month)
-        pylab.plot(date_tag[-n_month:], playtime[-n_month:], '.-')
+        pylab.plot(date_tag[-n_month:], playtime[-n_month:])
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
@@ -414,7 +445,7 @@ class ServerStats:
         pylab.clf()
 
         # playtime by day (current week)
-        pylab.plot(date_tag[-n_week:], playtime[-n_week:], '.-')
+        pylab.plot(date_tag[-n_week:], playtime[-n_week:])
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
@@ -429,7 +460,8 @@ class ServerStats:
         # plot weekday pie chart
         labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
         explode= [.03]*7
-        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True)
+        colors = ('#FF5050', '#009933', '#9966FF', '#996600', '#4D9494', '#C28585', '#3366CC')
+        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True, colors=colors)
         pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
         pylab.savefig('img/server_weekday_pie.png')
         pylab.clf()
