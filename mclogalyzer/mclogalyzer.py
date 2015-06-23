@@ -117,6 +117,8 @@ class UserStats:
         self._death_count = 0
         self._death_types = {}
 
+        self._include_figures = False
+
         # Rage quit tracking
         self._last_death_time = None
         self._ragequits = 0
@@ -164,6 +166,7 @@ class UserStats:
         justHours = matplotlib.dates.DateFormatter('%H:%M')
         pylab.plot(x, self._hour_activity, 'o-')
         pylab.gca().xaxis.set_major_formatter(justHours)
+        pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.xlabel('Clock');
         pylab.ylabel('Minutes played');
         pylab.title('Daytime play distribution')
@@ -297,6 +300,10 @@ class UserStats:
     def ragequit_count(self):
         return self._ragequits
 
+    @property
+    def include_figures(self):
+        return self._include_figures
+
 class ChatLog:
     def __init__(self, timestamp, user, msg):
         self._time    = str("%02d:%02d:%02d"%(timestamp.hour,timestamp.minute,timestamp.second))
@@ -342,6 +349,90 @@ class ServerStats:
         self._max_players = 0
         self._max_players_date = None
         self._include_figures = False
+
+        self._day_activity  = {}
+        self._hour_activity = [0]*24
+    
+    def add_activity(self, user):
+        for d in user._day_activity:
+            if d in self._day_activity:
+                self._day_activity[d] += user._day_activity[d] 
+            else:
+                self._day_activity[d]  = user._day_activity[d]
+        for i in range(len(self._hour_activity)):
+            self._hour_activity[i] += user._hour_activity[i]
+
+    def make_plots(self, width, height):
+        print 'Creating figures for server'
+        # make daytime distribution plot
+        pylab.figure(1, figsize=(width/100.0, height/100.0))
+        x = []
+        for i in range(24):
+            x.append(datetime.datetime(2001, 1,1, hour=i))
+        justHours = matplotlib.dates.DateFormatter('%H:%M')
+        pylab.plot(x, self._hour_activity, 'o-')
+        pylab.gca().xaxis.set_major_formatter(justHours)
+        pylab.xlabel('Clock');
+        pylab.ylabel('Minutes played');
+        pylab.title('Daytime play distribution')
+        pylab.savefig('img/server_daytime_dist.png')
+        pylab.clf()
+
+        # playtime by day
+        today = datetime.date.today().toordinal()
+        start_date = self._statistics_since.toordinal()
+        n_days   = today - start_date + 1
+        n_month  = datetime.date.today().day
+        n_week   = datetime.date.today().weekday() + 1
+        playtime = [0]*n_days
+        weektime = [0]*7
+        date_tag = []
+        for i in range(n_days):
+            date_tag.append(datetime.datetime.fromordinal(start_date + i))
+        for date in self._day_activity:
+            playtime[date-start_date]                            = self._day_activity[date]
+            weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
+
+        # playtime by day (all history)
+        pylab.plot(date_tag, playtime, '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day')
+        pylab.savefig('img/server_day_history.png')
+        pylab.clf()
+
+        # playtime by day (current month)
+        pylab.plot(date_tag[-n_month:], playtime[-n_month:], '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day this month')
+        pylab.savefig('img/server_day_month.png')
+        pylab.clf()
+
+        # playtime by day (current week)
+        pylab.plot(date_tag[-n_week:], playtime[-n_week:], '.-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
+        pylab.gca().xaxis.set_minor_locator(matplotlib.ticker.MaxNLocator(1))
+        matplotlib.ticker.MaxNLocator
+        pylab.xlabel('Date');
+        pylab.ylabel('Minutes played');
+        pylab.title('Play minutes per day this week')
+        pylab.savefig('img/server_day_week.png')
+        pylab.clf()
+
+        # plot weekday pie chart
+        labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+        explode= [.03]*7
+        pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True)
+        pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
+        pylab.savefig('img/server_weekday_pie.png')
+        pylab.clf()
 
     @property
     def statistics_since(self):
@@ -653,6 +744,10 @@ def main():
     whitelist_users = parse_whitelist(args["whitelist"]) if args["whitelist"] else None
     users, server, chats = parse_logs(args["logdir"], since, whitelist_users)
 
+    # sum up the use statistics for all single users to get serverwide results
+    for u in users:
+        server.add_activity(u)
+
     if not args['chat']:
         chats = [] # ignore chat messages
     if args['figures']:
@@ -676,7 +771,9 @@ def main():
     
     if server._include_figures:
         for u in users:
+            u._include_figures = True
             u.make_plots(figure_width, figure_height)
+        server.make_plots(figure_width, figure_height)
 
     f = open(args["output"], "w")
     f.write(template.render(users=users,

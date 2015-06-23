@@ -218,6 +218,17 @@
 						<th>Maximum online players:</th>
 						<td>{{ server.max_players }} ({{ server.max_players_date }})</td>
 					</tr>
+					{% if server.include_figures %}
+					<tr>
+						<td colspan="2"><img src="img/server_weekday_pie.png"/></td>
+					</tr>
+					<tr>
+						<td colspan="2"><img src="img/server_daytime_dist.png"/></td>
+					</tr>
+					<tr>
+						<td colspan="2"><img src="img/server_day_history.png"/></td>
+					</tr>
+					{% endif %}
 				</table>
 			</div>
 			<div id="page-chat" class="page row">
@@ -324,7 +335,7 @@
 							</ul></td>
 						</tr>
 						{% endif %}
-						{% if server.include_figures %}
+						{% if user.include_figures %}
 						<tr>
 							<td colspan="2"><img src="img/{{ user.username }}_weekday_pie.png"/></td>
 						</tr>
