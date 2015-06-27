@@ -25,7 +25,6 @@ import os
 import re
 import sys
 import time
-import numpy
 import matplotlib
 matplotlib.use('Agg') # force plotter to not use an x-backend
 import pylab
@@ -116,6 +115,9 @@ class UserStats:
 
         self._death_count = 0
         self._death_types = {}
+
+        self._pvp_kills   = {}
+        self._pvp_deaths  = 0
 
         self._include_figures = False
 
@@ -297,6 +299,17 @@ class UserStats:
         return sorted(self._death_types.items(), key=lambda k: k[1])
 
     @property
+    def pvp_kills(self):
+        kills = 0
+        for user in self._pvp_kills:
+            kills += self._pvp_kills[user]
+        return kills
+
+    @property
+    def pvp_deaths(self):
+        return self._pvp_deaths
+
+    @property
     def achievement_count(self):
         return self._achievement_count
 
@@ -360,6 +373,7 @@ class ServerStats:
 
         self._day_play_minutes  = {}
         self._day_active_users  = {}
+        self._day_pvp_kills     = {}
         self._hour_activity = [0]*24
     
     def add_activity(self, user):
@@ -405,14 +419,18 @@ class ServerStats:
         n_week   = datetime.date.today().weekday() + 1
         playtime = [0]*n_days
         users    = [0]*n_days
+        pvp_kills= [0]*n_days
         weektime = [0]*7
         date_tag = []
         for i in range(n_days):
             date_tag.append(datetime.datetime.fromordinal(start_date + i))
         for date in self._day_play_minutes:
-            playtime[date-start_date]                            = self._day_play_minutes[date]
-            users[   date-start_date]                            = self._day_active_users[date]
-            weektime[datetime.date.fromordinal(date).weekday()] += self._day_play_minutes[date]
+            weekday = datetime.date.fromordinal(date).weekday()
+            playtime[date-start_date]     = self._day_play_minutes[date]
+            users[   date-start_date]     = self._day_active_users[date]
+            weektime[weekday]            += self._day_play_minutes[date]
+        for date in self._day_pvp_kills:
+            pvp_kills[date-start_date]    = self._day_pvp_kills[date];
 
         # playtime by day (all history)
         pylab.plot(date_tag, playtime)
@@ -425,13 +443,23 @@ class ServerStats:
         pylab.clf()
 
         # active users by day (all history)
-        pylab.plot(date_tag, users)
+        pylab.plot(date_tag, users, 'm-')
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
         pylab.ylabel('Active players');
         pylab.title('Online players per day')
         pylab.savefig('img/server_day_users.png')
+        pylab.clf()
+
+        # pvp kills per day
+        pylab.plot(date_tag, pvp_kills, 'r-')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
+        pylab.xlabel('Date');
+        pylab.ylabel('PvP Kills');
+        pylab.title('Server hostility: PvP kills per day')
+        pylab.savefig('img/server_day_pvp.png')
         pylab.clf()
 
         # playtime by day (current month)
@@ -538,8 +566,9 @@ def grep_death(line):
     for regex in REGEX_DEATH_MESSAGES:
         search = regex.search(line)
         if search:
-            return search.group(1), capitalize_first(search.group(2))
-    return None, None
+            words = line.split(' ')
+            return search.group(1), capitalize_first(search.group(2)), words[-1]
+    return None, None, None
 
 def grep_chatlog(line):
     search
@@ -676,7 +705,7 @@ def parse_logs(logdir, since=None, whitelist_users=None):
                         achievement_user._achievement_count += 1
                         achievement_user._achievements.append(achievement)
             else:
-                death_username, death_type = grep_death(line)
+                death_username, death_type, last_word = grep_death(line)
                 death_time = grep_log_datetime(today, line)
                 if death_username is not None:
                     if death_username in users:
@@ -686,6 +715,17 @@ def parse_logs(logdir, since=None, whitelist_users=None):
                         if death_type not in death_user._death_types:
                             death_user._death_types[death_type] = 0
                         death_user._death_types[death_type] += 1
+                        if last_word in users:
+                            kill_user = users[last_word]
+                            if death_user in kill_user._pvp_kills:
+                                kill_user._pvp_kills[death_user] += 1
+                            else:
+                                kill_user._pvp_kills[death_user]  = 1
+                            kill_day = death_time.date().toordinal()
+                            if kill_day in server._day_pvp_kills:
+                                server._day_pvp_kills[kill_day] += 1
+                            else:
+                                server._day_pvp_kills[kill_day]  = 1
                 else:
                     date = grep_log_datetime(today, line)
                     search = REGEX_CHAT_USERNAME.search(line)
@@ -701,6 +741,12 @@ def parse_logs(logdir, since=None, whitelist_users=None):
             chat.append(thisChatDay)
             thisChatDay._chat = thisChatDay._chat[::-1] # reverse chat list so newest on top
     chat = chat[::-1]
+
+    # update pvp deaths
+    for killername in users:
+        killer = users[killername]
+        for victim in killer._pvp_kills:
+            victim._pvp_deaths += killer._pvp_kills[victim]
 
     if whitelist_users is not None:
         for username in whitelist_users:

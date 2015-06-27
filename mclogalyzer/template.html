@@ -37,6 +37,8 @@
 			[".c-last-login", "Last login", false],
 			[".c-longest-session", "Longest session", false],
 			[".c-deaths", "Deaths", false],
+			[".c-pvp-kills", "PvP kills", false],
+			[".c-pvp-deaths", "PvP deaths", false],
 			[".c-ragequits", "Rage quits", false],
 			[".c-achievements", "Achievements", false],
 			[".c-active-days", "Active days", false],
@@ -164,6 +166,8 @@
 								<th class="col c-last-login">Last login</th>
 								<th class="col c-longest-session">Longest session</th>
 								<th class="col c-deaths">Deaths</th>
+								<th class="col c-pvp-kills">PvP Kills</th>
+								<th class="col c-pvp-deaths">PvP Deaths</th>
 								<th class="col c-ragequits">Rage quits</th>
 								<th class="col c-achievements">Achievements</th>
 								<th class="col c-active-days">Active days</th>
@@ -188,6 +192,8 @@
 								<td class="col c-last-login">{{ user.last_login }}</td>
 								<td class="col c-longest-session">{{ user.longest_session }}</td>
 								<td class="col c-deaths">{{ user.death_count }}</td>
+								<td class="col c-pvp-kills">{{ user.pvp_kills }}</td>
+								<td class="col c-pvp-deaths">{{ user.pvp_deaths }}</td>
 								<td class="col c-ragequits">{{ user.ragequit_count }}</td>
 								<td class="col c-achievements">{{ user.achievement_count }}</td>
 								<td class="col c-active-days">{{ user.active_days }}</td>
@@ -230,6 +236,9 @@
 					</tr>
 					<tr>
 						<td colspan="2"><img src="img/server_day_users.png"/></td>
+					</tr>
+					<tr>
+						<td colspan="2"><img src="img/server_day_pvp.png"/></td>
 					</tr>
 					{% endif %}
 				</table>
@@ -320,6 +329,14 @@
 							</td>
 						</tr>
 						{% endif %}
+						<tr>
+							<th>PvP Kills:</th>
+							<td>{{ user.pvp_kills}}</td>
+						</tr>
+						<tr>
+							<th>PvP Deaths:</th>
+							<td>{{ user.pvp_deaths}}</td>
+						</tr>
 						<tr>
 							<th>Rage quits:</th>
 							<td>{{ user.ragequit_count}}</td>
