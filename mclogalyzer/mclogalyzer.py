@@ -199,7 +199,7 @@ class UserStats:
             playtime[date-start_date]                            = self._day_activity[date]
             weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
 
-        # playtime by day (all history)
+        # playtime by day 
         pylab.plot(date_tag, playtime)
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
@@ -207,29 +207,6 @@ class UserStats:
         pylab.ylabel('Minutes played');
         pylab.title('Play minutes per day')
         pylab.savefig('img/'+self._username+'_day_history.png')
-        pylab.clf()
-
-        # playtime by day (current month)
-        pylab.plot(date_tag[-n_month:], playtime[-n_month:])
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
-        pylab.xlabel('Date');
-        pylab.ylabel('Minutes played');
-        pylab.title('Play minutes per day this month')
-        pylab.savefig('img/'+self._username+'_day_month.png')
-        pylab.clf()
-
-        # playtime by day (current week)
-        pylab.plot(date_tag[-n_week:], playtime[-n_week:])
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
-        pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
-        pylab.gca().xaxis.set_minor_locator(matplotlib.ticker.MaxNLocator(1))
-        matplotlib.ticker.MaxNLocator
-        pylab.xlabel('Date');
-        pylab.ylabel('Minutes played');
-        pylab.title('Play minutes per day this week')
-        pylab.savefig('img/'+self._username+'_day_week.png')
         pylab.clf()
 
         # plot weekday pie chart
@@ -442,7 +419,7 @@ class ServerStats:
         pylab.savefig('img/server_day_history.png')
         pylab.clf()
 
-        # active users by day (all history)
+        # active users by day 
         pylab.plot(date_tag, users, 'm-')
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
@@ -460,29 +437,6 @@ class ServerStats:
         pylab.ylabel('PvP Kills');
         pylab.title('Server hostility: PvP kills per day')
         pylab.savefig('img/server_day_pvp.png')
-        pylab.clf()
-
-        # playtime by day (current month)
-        pylab.plot(date_tag[-n_month:], playtime[-n_month:])
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
-        pylab.xlabel('Date');
-        pylab.ylabel('Minutes played');
-        pylab.title('Play minutes per day this month')
-        pylab.savefig('img/server_day_month.png')
-        pylab.clf()
-
-        # playtime by day (current week)
-        pylab.plot(date_tag[-n_week:], playtime[-n_week:])
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
-        pylab.gca().xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(n_week+1))
-        pylab.gca().xaxis.set_minor_locator(matplotlib.ticker.MaxNLocator(1))
-        matplotlib.ticker.MaxNLocator
-        pylab.xlabel('Date');
-        pylab.ylabel('Minutes played');
-        pylab.title('Play minutes per day this week')
-        pylab.savefig('img/server_day_week.png')
         pylab.clf()
 
         # plot weekday pie chart
