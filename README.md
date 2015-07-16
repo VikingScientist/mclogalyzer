@@ -30,6 +30,14 @@ Now you can run it with `mclogalyzer`.
 
 Alternatively you can directly run the script `mclogalyzer/mclogalyzer.py`.
 
+## Development ##
+
+The files are documented by epydoc standards. To generate the documentation call
+```
+epydoc mclogalyzer/mclogalyzer.py
+```
+which generates the documenation in the html folder. 
+
 ## How to use the script ##
 
 You have to pass the path to the Minecraft server log directory and the path to an
@@ -53,3 +61,6 @@ to generate the report of last month or last week.
 You can use the whitelist as a guide using `--w whitelist.json`. If so, users
 not included in the whitelist will be removed from final results, and users not
 present in log file but present in whitelist will be added to the output.
+
+You can add full chatlog history by providing `--chat`. This will result in 
+large file size and provide a chat tab at the top menu.

@@ -91,21 +91,27 @@ for message in DEATH_MESSAGES:
 # Got this value from http://minecraft.gamepedia.com/Achievements
 ACHIEVEMENTS_AVAILABLE = 34
 
-# Maximum duration, in seconds, that a logout can be considered a ragequit
 RAGEQUIT_MAX_ELAPSED_TIME = 45
+""" Maximum duration, in seconds, that a logout can be considered a ragequit """
 
 def capitalize_first(str):
+    """ Returns the argument string with the first character capitalized """
     if not len(str):
         return ""
     return str[:1].upper() + str[1:]
 
 
 class UserStats:
+    """ Class containing all stats for one particular user. This includes, but are not limited to username, playtime, kills and achivements """
     def __init__(self, username=""):
+        """ Constructor
+        @param username: Minecraft login username
+        @type  username: String
+        """
         self._username = username
         self._logins = 0
 
-        self._day_activity  = {}
+        self._day_activity  = {} 
         self._hour_activity = [0]*24
         self._prev_login   = None
         self._first_login  = None
@@ -131,6 +137,11 @@ class UserStats:
         self._achievements = []
 
     def handle_logout(self, date):
+        """ Count up use statistic since self._prev_login was set
+        @param date: Timestamp of logout date and time
+        @type  date: datetime.datetime
+        @return    : None
+        """
         if self._prev_login is None:
             return
         days, hours = get_time_distribution(self._prev_login, date)
@@ -151,6 +162,11 @@ class UserStats:
 
 
     def track_ragequits(self, date):
+        """ Called on logout to check if time since last death is short enough to warrant a ragequit tag
+        @param date: Timestamp of logout date and time
+        @type  date: datetime.datetime
+        @return    : None
+        """
         if self._last_death_time:
             elapsed_death_to_logout = (date - self._last_death_time).total_seconds()
             if elapsed_death_to_logout <= RAGEQUIT_MAX_ELAPSED_TIME:
@@ -159,109 +175,133 @@ class UserStats:
         self._last_death_time = None
 
     def make_plots(self, width, height):
+        """ Create images of use statistic and store these in the 'img' folder
+        @param width : Figure width in pixels
+        @type  width : Int
+        @param height: Figure height in pixels
+        @type  height: Int
+        @return      : None
+        """
         print 'Creating figures for user ', self._username
         # create figure holder used for all plots
         pylab.figure(1, figsize=(width/100.0, height/100.0))
 
-        ### make daytime distribution plot
-        # create x-axis time stamps
-        x = []
+        ### pre-evaluate a few variables needed to do the plotting
+        clock_tag = [] # 24-hour clock tag for x-axis
         for i in range(24):
-            x.append(datetime.datetime(2001, 1,1, hour=i))
-        # do the actual plot
-        pylab.bar(x, self._hour_activity, width=1.0/24.0)
-        # format to make it pretty
-        justHours = matplotlib.dates.DateFormatter('%H:%M')
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(justHours)
-        pylab.xlabel('Clock');
-        pylab.xlim(x[0], x[-1])
-        pylab.ylabel('Minutes played');
-        pylab.title('Daytime play distribution')
-        # save, clear and continue with the rest of the plots
-        pylab.savefig('img/'+self._username+'_daytime_dist.png')
-        pylab.clf()
-
-        # playtime by day
+            clock_tag.append(datetime.datetime(2001, 1,1, hour=i))
+        # playtime by day (all history, last week and last month)
         today = datetime.date.today().toordinal()
         start_date = today
         for date in self._day_activity:
             start_date = min(start_date, date)
-        n_days   = today - start_date + 1
-        n_month  = datetime.date.today().day
-        n_week   = datetime.date.today().weekday() + 1
+        n_days   = today - start_date + 1              # days in recorded history
+        n_month  = datetime.date.today().day           # days in this month
+        n_week   = datetime.date.today().weekday() + 1 # days in this week
         playtime = [0]*n_days
         weektime = [0]*7
-        date_tag = []
+        date_tag = [] # date tags for x-axis on history plots
         for i in range(n_days):
             date_tag.append(datetime.datetime.fromordinal(start_date + i))
         for date in self._day_activity:
             playtime[date-start_date]                            = self._day_activity[date]
             weektime[datetime.date.fromordinal(date).weekday()] += self._day_activity[date]
 
-        # playtime by day 
+        ### make daytime distribution plot (play minutes by clock hour)
+        # do the actual plot
+        pylab.bar(clock_tag, self._hour_activity, width=1.0/24.0)
+        # format to make it pretty
+        justHours = matplotlib.dates.DateFormatter('%H:%M')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(justHours)
+        pylab.xlabel('Clock');
+        pylab.xlim(clock_tag[0], clock_tag[-1])
+        pylab.ylabel('Minutes played');
+        pylab.title('Daytime play distribution')
+        # save, clear and continue with the rest of the plots
+        pylab.savefig('img/'+self._username+'_daytime_dist.png')
+        pylab.clf()
+
+        ### make date playtime distribution plot (play minutes by date)
+        # do the actual plot
         pylab.plot(date_tag, playtime)
+        # format to make it pretty
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
         pylab.ylabel('Minutes played');
         pylab.title('Play minutes per day')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/'+self._username+'_day_history.png')
         pylab.clf()
 
-        # plot weekday pie chart
+        ### make weekday playtime pie chart
         labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
         explode= [.03]*7
         colors = ('#FF5050', '#009933', '#9966FF', '#996600', '#4D9494', '#C28585', '#3366CC')
+        # do the actual plot
         pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True, colors=colors)
-        pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
+        # format to make it pretty
+        pylab.title('Playtime per weekday')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/'+self._username+'_weekday_pie.png')
         pylab.clf()
 
     @property
     def username(self):
+        """ Minecraft username of this user """
         return self._username
 
     @property
     def logins(self):
+        """ Number of times logged in """
         return self._logins
 
     @property
     def time(self):
+        """ Total amount of playtime (formatted string)  """
         return format_delta(self._time)
 
     @property
     def time_per_login(self):
+        """ Average playtime per login (formatted string)  """
         return format_delta(
             self._time / self._logins if self._logins != 0 else datetime.timedelta(), False)
 
     @property
     def active_days(self):
+        """ Number of unique days logged in to server """
         return len(self._day_activity)
 
     @property
     def time_per_active_day(self):
+        """ Average time spent per day played (formatted string)  """
         return format_delta(
             self._time / self.active_days if self.active_days != 0 else datetime.timedelta(), False)
 
     @property
     def first_login(self):
+        """ First date logged in to server """
         return str(self._first_login)
 
     @property
     def last_login(self):
+        """ Last date logged in to server """
         return str(self._last_login)
 
     @property
     def longest_session(self):
+        """ Longest session logged in """
         return format_delta(self._longest_session, False)
 
     @property
     def messages(self):
+        """ Number of chat messages written """
         return self._messages
 
     @property
     def time_per_message(self):
+        """ Average time between chat messages """
         if self._messages == 0:
             return "<div class='text-center'>-</div>"
         return format_delta(
@@ -269,14 +309,17 @@ class UserStats:
 
     @property
     def death_count(self):
+        """ Number of recorded deaths """
         return self._death_count
 
     @property
     def death_types(self):
+        """ Dictionary of deaths with death type as keys and the number of that death as values """
         return sorted(self._death_types.items(), key=lambda k: k[1])
 
     @property
     def pvp_kills(self):
+        """ Number of kills of other players """
         kills = 0
         for user in self._pvp_kills:
             kills += self._pvp_kills[user]
@@ -284,63 +327,86 @@ class UserStats:
 
     @property
     def pvp_deaths(self):
+        """ Number of times killed by another player """
         return self._pvp_deaths
 
     @property
     def achievement_count(self):
+        """ Number of recorded achivements """
         return self._achievement_count
 
     @property
     def achievements(self):
+        """ List of achivements """
         return sorted(self._achievements)
 
     @property
     def ragequit_count(self):
+        """Number of rage quits (if logout occurs seconds or less after death, see RAGEQUIT_MAX_ELAPSED_TIME) """
         return self._ragequits
 
     @property
     def include_figures(self):
+        """ Boolean flag if figures are to be generated and included for this user """
         return self._include_figures
 
 class ChatLog:
+    """ One chat message, the user typing it and the timestamp """
     def __init__(self, timestamp, user, msg):
+        """ Constructor
+        @param timestamp: Time of chat message
+        @type  timestamp: datetime.datetime
+        @param user     : User typing this chat
+        @type  user     : String
+        @param msg      : Message content
+        @type  msg      : String
+        """
         self._time    = str("%02d:%02d:%02d"%(timestamp.hour,timestamp.minute,timestamp.second))
         self._user    = user
         self._message = msg
 
     @property
     def time(self):
+        """ Time of message """
         return self._time
     @property
     def user(self):
+        """ User typing the message """
         return self._user
     @property
     def message(self):
+        """ Message content """
         return self._message
 
 class ChatDay:
+    """ Container for all chat messages on one given day. Mainly used to format output html in a nice manner """
     def __init__(self, timestamp):
+        """ Constructor
+        @param timestamp: Time of chat message
+        @type  timestamp: datetime.date
+        """
         self._date     = str("%d-%02d-%02d"%(timestamp.year,timestamp.month,timestamp.day))
         self._chat     = []
         self._even_day = False;
 
-    # list of all chat messages on this day
     @property
     def chat(self):
+        """ list of all chat messages on this day """
         return self._chat
 
-    # date of chat history
     @property
     def date(self):
+        """ date of chat history """
         return self._date
 
-    # tag every other day to increase readability on final document
     @property
     def even_day(self):
+        """ tag every other day to increase readability on final document """
         return self._even_day
     
 
 class ServerStats:
+    """ Class containing all server-wide stats. Examples include accumulated playtime by all players and max online players """
     def __init__(self):
         self._statistics_since = None
         self._time_played = datetime.timedelta()
@@ -354,6 +420,11 @@ class ServerStats:
         self._hour_activity = [0]*24
     
     def add_activity(self, user):
+        """ Add activity (playtime by date) from a single user
+        @param user: User with complete _day_play_minutes parsed from the log files
+        @type  user: UserStats
+        @return    : None
+        """
         for d in user._day_activity:
             if d in self._day_play_minutes:
                 self._day_play_minutes[d] += user._day_activity[d] 
@@ -365,40 +436,32 @@ class ServerStats:
             self._hour_activity[i] += user._hour_activity[i]
 
     def make_plots(self, width, height):
+        """ Create images of server-wide use statistic and store these in the 'img' folder
+        @param width : Figure width in pixels
+        @type  width : Int
+        @param height: Figure height in pixels
+        @type  height: Int
+        @return      : None
+        """
         print 'Creating figures for server'
         # create figure holder used for all plots
         pylab.figure(1, figsize=(width/100.0, height/100.0))
 
-        ### make daytime distribution plot
+        ### pre-evaluate a few variables needed to do the plotting
         # create x-axis time stamps
-        x = []
+        clock_tag = [] # 24-hour clock tag for x-axis
         for i in range(24):
-            x.append(datetime.datetime(2001, 1,1, hour=i))
-        # do the actual plot
-        pylab.bar(x, self._hour_activity, width=1.0/24.0)
-        # format to make it pretty
-        justHours = matplotlib.dates.DateFormatter('%H:%M')
-        pylab.setp(pylab.xticks()[1], rotation=20)
-        pylab.gca().xaxis.set_major_formatter(justHours)
-        pylab.xlabel('Clock');
-        pylab.xlim(x[0], x[-1])
-        pylab.ylabel('Minutes played');
-        pylab.title('Daytime play distribution')
-        # save, clear and continue with the rest of the plots
-        pylab.savefig('img/server_daytime_dist.png')
-        pylab.clf()
-
-        # playtime by day
+            clock_tag.append(datetime.datetime(2001, 1,1, hour=i))
         today = datetime.date.today().toordinal()
         start_date = self._statistics_since.toordinal()
-        n_days   = today - start_date + 1
-        n_month  = datetime.date.today().day
-        n_week   = datetime.date.today().weekday() + 1
-        playtime = [0]*n_days
-        users    = [0]*n_days
-        pvp_kills= [0]*n_days
-        weektime = [0]*7
-        date_tag = []
+        n_days   = today - start_date + 1              # days in recorded history
+        n_month  = datetime.date.today().day           # days in this month
+        n_week   = datetime.date.today().weekday() + 1 # days in this week
+        playtime = [0]*n_days                          # play minutes per date
+        users    = [0]*n_days                          # online users per date
+        pvp_kills= [0]*n_days                          # player vs player kills per date
+        weektime = [0]*7                               # play minutes per weekday
+        date_tag = []                                  # date tags for x-axis on history plots
         for i in range(n_days):
             date_tag.append(datetime.datetime.fromordinal(start_date + i))
         for date in self._day_play_minutes:
@@ -409,33 +472,57 @@ class ServerStats:
         for date in self._day_pvp_kills:
             pvp_kills[date-start_date]    = self._day_pvp_kills[date];
 
-        # playtime by day (all history)
+        ### make daytime distribution plot (play minutes by clock hour)
+        # do the actual plot
+        pylab.bar(clock_tag, self._hour_activity, width=1.0/24.0)
+        # format to make it pretty
+        justHours = matplotlib.dates.DateFormatter('%H:%M')
+        pylab.setp(pylab.xticks()[1], rotation=20)
+        pylab.gca().xaxis.set_major_formatter(justHours)
+        pylab.xlabel('Clock');
+        pylab.xlim(clock_tag[0], clock_tag[-1])
+        pylab.ylabel('Minutes played');
+        pylab.title('Daytime play distribution')
+        # save, clear and continue with the rest of the plots
+        pylab.savefig('img/server_daytime_dist.png')
+        pylab.clf()
+
+        ### make date playtime distribution plot (play minutes by date)
+        # do the actual plot
         pylab.plot(date_tag, playtime)
+        # format to make it pretty
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
         pylab.ylabel('Minutes played');
         pylab.title('Play minutes per day')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/server_day_history.png')
         pylab.clf()
 
-        # active users by day 
+        ### make online users plot (unique logged in users per date)
+        # do the actual plot
         pylab.plot(date_tag, users, 'm-')
+        # format to make it pretty
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
         pylab.ylabel('Active players');
         pylab.title('Online players per day')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/server_day_users.png')
         pylab.clf()
 
-        # pvp kills per day
+        ### make hostility plot (pvp kills per date)
+        # do the actual plot
         pylab.plot(date_tag, pvp_kills, 'r-')
+        # format to make it pretty
         pylab.setp(pylab.xticks()[1], rotation=20)
         pylab.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %d %Y'))
         pylab.xlabel('Date');
         pylab.ylabel('PvP Kills');
         pylab.title('Server hostility: PvP kills per day')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/server_day_pvp.png')
         pylab.clf()
 
@@ -443,33 +530,47 @@ class ServerStats:
         labels = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
         explode= [.03]*7
         colors = ('#FF5050', '#009933', '#9966FF', '#996600', '#4D9494', '#C28585', '#3366CC')
+        # do the actual plot
         pylab.pie(weektime[::-1], explode=explode, labels=labels[::-1], autopct='%1.1f%%', shadow=True, colors=colors)
-        pylab.title('Playtime per weekday') #, bbox={'facecolor':'0.8', 'pad':5})
+        # format to make it pretty
+        pylab.title('Playtime per weekday')
+        # save, clear and continue with the rest of the plots
         pylab.savefig('img/server_weekday_pie.png')
         pylab.clf()
 
     @property
     def statistics_since(self):
+        """ Date tag of first log entry """
         return self._statistics_since
 
     @property
     def time_played(self):
+        """ Accumulated play time of all users """
         return format_delta(self._time_played, True, True)
 
     @property
     def max_players(self):
+        """ Maximum users online at the same time """
         return self._max_players
 
     @property
     def max_players_date(self):
+        """ Date when the maximum numbers of players were online """
         return self._max_players_date
 
     @property
     def include_figures(self):
+        """ Boolean flag if figures are to be generated and included for server-wide statistics """
         return self._include_figures
 
 
 def grep_logname_date(line):
+    """ Extract date from file name
+    @param line: filename starting with year-month-day
+    @type  line: String
+    @return    : The date tag
+    @rtype     : datetime.date
+    """
     try:
         d = time.strptime("-".join(line.split("-")[:3]), "%Y-%m-%d")
     except ValueError:
@@ -478,6 +579,14 @@ def grep_logname_date(line):
 
 
 def grep_log_datetime(date, line):
+    """ Extract time from one log line
+    @param line: A single line from the log file
+    @type  line: String
+    @param date: The current date
+    @type  date: datetime.date
+    @return    : The line date and time
+    @rtype     : datetime.datetime
+    """
     try:
         d = time.strptime(line.split(" ")[0], "[%H:%M:%S]")
     except ValueError:
@@ -489,6 +598,12 @@ def grep_log_datetime(date, line):
 
 
 def grep_login_username(line):
+    """ Extract username from a login line in the log
+    @param line: A single line from the log file
+    @type  line: String
+    @return    : The username
+    @rtype     : String
+    """
     search = REGEX_LOGIN_USERNAME.search(line)
     if not search:
         print "### Warning: Unable to find login username:", line
@@ -498,6 +613,12 @@ def grep_login_username(line):
 
 
 def grep_logout_username(line):
+    """ Extract username from a logout line in the log
+    @param line: A single line from the log file
+    @type  line: String
+    @return    : The username
+    @rtype     : String
+    """
     search = REGEX_LOGOUT_USERNAME.search(line)
     if not search:
         search = REGEX_LOGOUT_USERNAME2.search(line)
@@ -509,6 +630,12 @@ def grep_logout_username(line):
 
 
 def grep_kick_username(line):
+    """ Extract username from a kick line in the log
+    @param line: A single line from the log file
+    @type  line: String
+    @return    : The username
+    @rtype     : String
+    """
     search = REGEX_KICK_USERNAME.search(line)
     if not search:
         print "### Warning: Unable to find kick logout username:", line
@@ -517,6 +644,12 @@ def grep_kick_username(line):
 
 
 def grep_death(line):
+    """ Extract death info from a death line in the log. In case of PvP kill, extract killer from the last word
+    @param line: A single line from the log file
+    @type  line: String
+    @return    : Username, Death type, Last word (PvP victim if applicable)
+    @rtype     : Tuple (String,String,String)
+    """
     for regex in REGEX_DEATH_MESSAGES:
         search = regex.search(line)
         if search:
@@ -528,6 +661,12 @@ def grep_chatlog(line):
     search
 
 def grep_achievement(line):
+    """ Extract achivement from a achivement award line in the log
+    @param line: A single line from the log file
+    @type  line: String
+    @return    : Username and achivement
+    @rtype     : Tuple (String, String)
+    """
     search = REGEX_ACHIEVEMENT.search(line)
     if not search:
         print "### Warning: Unable to find achievement username or achievement:", line
@@ -535,8 +674,15 @@ def grep_achievement(line):
     username = search.group(1)
     return username.decode("ascii", "ignore").encode("ascii", "ignore"), search.group(2)
 
-# returns number of minutes played during each clock hour and date between start and end
 def get_time_distribution(start, end):
+    """ Compute number of minutes played during each clock hour and date between start and end
+    @param start: login time
+    @type  start: datetime.datetime
+    @param end  : logout time
+    @type  end  : datetime.datetime
+    @return     : Play minutes per hour, Play minutes per date
+    @rtype      : Tuple (List of 24 Float, Dictionary(datetime.datetime, Float))
+    """
     hours = [0]*24
     days  = {}
     timeleft = end-start
@@ -577,6 +723,16 @@ def parse_whitelist(whitelist_path):
 
 
 def parse_logs(logdir, since=None, whitelist_users=None):
+    """ Main function of the script. Parse all logs to generate user and server statistics
+    @param logdir          : Directory of log files
+    @type  logdir          : String
+    @param since           : logout time
+    @type  since           : datetime.datetime
+    @param whitelist_users : logout time
+    @type  whitelist_users : datetime.datetime
+    @return                : Stats for all users, the server and all chat messages
+    @rtype                 : Tuple (List of UserStats, ServerStats, List of ChatDay)
+    """
     users = {}
     chat = []
     server = ServerStats()
